@@ -31,7 +31,7 @@
 
   a{color:inherit;}
 
-  /* ---------- HEADER ---------- */
+  /*  HEADER  */
   header{
     border-bottom:1px solid var(--line);
     padding:22px 28px 0 28px;
@@ -67,7 +67,7 @@
   .seismo-scroll svg{height:100%; width:50%; display:block;}
   @keyframes scrollWave{ from{transform:translateX(0);} to{transform:translateX(-50%);} }
 
-  /* ---------- LAYOUT ---------- */
+  /*  LAYOUT  */
   main{
     padding:22px 28px 40px 28px; display:grid; grid-template-columns:1.15fr 1fr; gap:20px;
   }
@@ -196,7 +196,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
-/* ---------------- Reloj ---------------- */
+/*  Reloj  */
 function tickClock(){
   const now = new Date();
   document.getElementById('clock').textContent = now.toLocaleTimeString('es-CO', {hour12:false});
@@ -204,7 +204,7 @@ function tickClock(){
 }
 tickClock(); setInterval(tickClock, 1000);
 
-/* ---------------- Seismograma decorativo (ticker de fondo) ---------------- */
+/* Seismograma decorativo  */
 (function buildSeismoTicker(){
   const scroll = document.getElementById('seismoScroll');
   let d = "M0,27 ";
@@ -223,13 +223,13 @@ tickClock(); setInterval(tickClock, 1000);
   scroll.innerHTML = svgStr + svgStr;
 })();
 
-/* ---------------- Mapa sísmico ---------------- */
+/*  Mapa sismico */
 const map = L.map('map', {zoomControl:true, attributionControl:false}).setView([7.8, -75.8], 6);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
   maxZoom:18, subdomains:'abcd'
 }).addTo(map);
 
-// marcador de referencia: Montería
+// marcador de referencia: Monteria
 L.circleMarker([8.7479, -75.8814], {
   radius:5, color:'#49b9c9', weight:2, fillColor:'#49b9c9', fillOpacity:0.5
 }).addTo(map).bindPopup('Montería (referencia)');
@@ -253,7 +253,7 @@ async function loadEarthquakes(){
   const end = new Date();
   const start = new Date(end.getTime() - 30*24*3600*1000);
   const fmt = d => d.toISOString().slice(0,10);
-  // Ventana geográfica: Colombia, Panamá y borde caribeño (zona de mayor sismicidad cercana a Córdoba)
+  // Ventana geografica: Colombia, Panama y borde caribeño (zona de mayor sismicidad cercana a Cordoba)
   const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${fmt(start)}&endtime=${fmt(end)}&minlatitude=2&maxlatitude=13&minlongitude=-83&maxlongitude=-69&minmagnitude=2&orderby=time&limit=60`;
   try{
     const res = await fetch(url);
@@ -293,7 +293,7 @@ async function loadEarthquakes(){
 }
 loadEarthquakes();
 
-/* ---------------- Viento / vendavales ---------------- */
+/*  Viento / vendavales  */
 const towns = [
   {name:'Montería', lat:8.7479, lon:-75.8814},
   {name:'Lorica', lat:9.2372, lon:-75.8143},
@@ -357,7 +357,7 @@ async function loadWind(){
 }
 loadWind();
 
-/* Auto-actualización cada 5 minutos */
+/* Auto-actualizacion cada 5 minutos */
 setInterval(()=>{ loadEarthquakes(); loadWind(); }, 5*60*1000);
 </script>
 </body>
