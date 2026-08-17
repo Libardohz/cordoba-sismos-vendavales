@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitor Sísmico y de Vendavales · Córdoba</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root{
+    --bg-base:#0e1116;
+    --bg-panel:#171c24;
+    --bg-panel-2:#1f2631;
+    --line:#2a3341;
+    --text-primary:#edf0f3;
+    --text-muted:#8a94a6;
+    --text-faint:#5c6577;
+    --seismic:#e8542e;
+    --seismic-soft:rgba(232,84,46,0.16);
+    --wind:#49b9c9;
+    --wind-soft:rgba(73,185,201,0.16);
+    --warn:#f0b429;
+    --ok:#4caf7d;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg-base);color:var(--text-primary);font-family:'IBM Plex Sans',sans-serif;-webkit-font-smoothing:antialiased;}
+  body{min-height:100vh;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .display{font-family:'Space Grotesk',sans-serif;}
+
+  a{color:inherit;}
+
+  /* ---------- HEADER ---------- */
+  header{
+    border-bottom:1px solid var(--line);
+    padding:22px 28px 0 28px;
+    background:linear-gradient(180deg, #12161d 0%, var(--bg-base) 100%);
+  }
+  .header-top{display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px;}
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--text-faint); display:flex; align-items:center; gap:8px; margin-bottom:6px;
+  }
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(76,175,125,.18); animation:pulse 2.2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  h1{
+    font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:clamp(22px,3vw,34px);
+    margin:0 0 4px 0; letter-spacing:-0.01em;
+  }
+  h1 span{color:var(--seismic);}
+  .subtitle{color:var(--text-muted); font-size:14px; max-width:560px; line-height:1.5;}
+  .clock-block{text-align:right;}
+  .clock{font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:500; letter-spacing:.02em;}
+  .clock-label{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.1em; margin-top:2px;}
+
+  /* seismograph ticker */
+  .seismo-track{
+    margin-top:18px; height:54px; overflow:hidden; position:relative;
+    border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+    background:
+      repeating-linear-gradient(90deg, transparent 0, transparent 39px, rgba(255,255,255,.03) 40px);
+  }
+  .seismo-scroll{
+    display:flex; width:200%; height:100%; animation:scrollWave 9s linear infinite;
+  }
+  .seismo-scroll svg{height:100%; width:50%; display:block;}
+  @keyframes scrollWave{ from{transform:translateX(0);} to{transform:translateX(-50%);} }
+
+  /* ---------- LAYOUT ---------- */
+  main{
+    padding:22px 28px 40px 28px; display:grid; grid-template-columns:1.15fr 1fr; gap:20px;
+  }
+  @media (max-width:920px){ main{grid-template-columns:1fr;} }
+
+  .panel{
+    background:var(--bg-panel); border:1px solid var(--line); border-radius:10px;
+    overflow:hidden; display:flex; flex-direction:column;
+  }
+  .panel-head{
+    padding:16px 18px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:10px;
+  }
+  .panel-title{font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:15px; display:flex; align-items:center; gap:8px;}
+  .swatch{width:9px;height:9px;border-radius:2px;}
+  .panel-meta{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-faint);}
+
+  #map{height:340px; width:100%; background:#101520;}
+  .leaflet-container{background:#101520;}
+
+  .quake-list{list-style:none; margin:0; padding:0; max-height:300px; overflow-y:auto;}
+  .quake-list li{
+    padding:11px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px; font-size:13px;
+  }
+  .quake-list li:last-child{border-bottom:none;}
+  .mag-chip{
+    font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:12px; min-width:40px; text-align:center;
+    padding:4px 0; border-radius:5px; flex-shrink:0;
+  }
+  .quake-place{flex:1; color:var(--text-primary);}
+  .quake-time{color:var(--text-faint); font-family:'IBM Plex Mono',monospace; font-size:11px; white-space:nowrap;}
+
+  /* wind panel */
+  .wind-grid{padding:16px 18px; display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  @media (max-width:520px){ .wind-grid{grid-template-columns:1fr;} }
+  .wind-card{
+    background:var(--bg-panel-2); border:1px solid var(--line); border-radius:8px; padding:13px 14px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .wind-card-top{display:flex; justify-content:space-between; align-items:baseline;}
+  .wind-city{font-weight:600; font-size:13px;}
+  .wind-status{font-family:'IBM Plex Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:.06em; padding:2px 7px; border-radius:20px;}
+  .wind-values{display:flex; align-items:baseline; gap:6px;}
+  .wind-gust{font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600;}
+  .wind-unit{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-faint);}
+  .wind-sub{font-size:11px; color:var(--text-muted); font-family:'IBM Plex Mono',monospace;}
+  .gauge-track{height:5px; border-radius:3px; background:var(--line); overflow:hidden;}
+  .gauge-fill{height:100%; border-radius:3px; transition:width .6s ease;}
+
+  .legend{padding:12px 18px; border-top:1px solid var(--line); display:flex; gap:16px; flex-wrap:wrap; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-muted);}
+  .legend span{display:inline-flex; align-items:center; gap:6px;}
+  .legend i{width:8px;height:8px;border-radius:50%;display:inline-block;}
+
+  .status-line{padding:10px 18px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-faint); border-top:1px solid var(--line);}
+  .status-line.error{color:var(--seismic);}
+
+  footer{
+    padding:18px 28px 32px 28px; border-top:1px solid var(--line); color:var(--text-faint); font-size:12px; line-height:1.6;
+  }
+  footer strong{color:var(--text-muted);}
+
+  ::-webkit-scrollbar{width:8px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:var(--line); border-radius:4px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div>
+      <div class="eyebrow"><span class="dot"></span> En vivo · datos abiertos</div>
+      <h1>Monitor <span>Sísmico</span> &amp; Vendavales · Córdoba</h1>
+      <div class="subtitle">Sismicidad regional (USGS) y ráfagas de viento por municipio (Open-Meteo). Proyecto académico de referencia — no es un sistema oficial de alerta temprana.</div>
+    </div>
+    <div class="clock-block">
+      <div class="clock mono" id="clock">--:--:--</div>
+      <div class="clock-label" id="dateLabel">cargando fecha</div>
+    </div>
+  </div>
+
+  <div class="seismo-track">
+    <div class="seismo-scroll" id="seismoScroll"></div>
+  </div>
+</header>
+
+<main>
+  <!-- SEISMIC PANEL -->
+  <section class="panel">
+    <div class="panel-head">
+      <div class="panel-title"><span class="swatch" style="background:var(--seismic)"></span> Actividad sísmica regional</div>
+      <div class="panel-meta">últimos 30 días · M≥2.0</div>
+    </div>
+    <div id="map"></div>
+    <ul class="quake-list" id="quakeList">
+      <li><span class="quake-place">Consultando red sísmica USGS…</span></li>
+    </ul>
+    <div class="legend">
+      <span><i style="background:#f0b429"></i> M 2–3.9 leve</span>
+      <span><i style="background:#e8752e"></i> M 4–4.9 moderado</span>
+      <span><i style="background:#e8542e"></i> M 5+ fuerte</span>
+    </div>
+    <div class="status-line" id="quakeStatus">Cargando…</div>
+  </section>
+
+  <!-- WIND PANEL -->
+  <section class="panel">
+    <div class="panel-head">
+      <div class="panel-title"><span class="swatch" style="background:var(--wind)"></span> Viento y riesgo de vendaval</div>
+      <div class="panel-meta">ráfaga actual · km/h</div>
+    </div>
+    <div class="wind-grid" id="windGrid">
+      <div class="wind-card"><div class="wind-city">Cargando municipios…</div></div>
+    </div>
+    <div class="legend">
+      <span><i style="background:#4caf7d"></i> &lt;40 km/h normal</span>
+      <span><i style="background:#f0b429"></i> 40–60 km/h atento</span>
+      <span><i style="background:#e8542e"></i> &gt;60 km/h vendaval</span>
+    </div>
+    <div class="status-line" id="windStatus">Cargando…</div>
+  </section>
+</main>
+
+<footer>
+  <strong>Fuentes de datos:</strong> Servicio Geológico de EE. UU. (USGS Earthquake Catalog, fdsnws/event) para sismicidad, y Open-Meteo (modelo de pronóstico horario) para viento y ráfagas en ocho cabeceras municipales de Córdoba. Ambas son APIs públicas gratuitas sin necesidad de clave. Este panel es un prototipo académico de visualización — para alertas oficiales consulte a la UNGRD, el SGC o el IDEAM.
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ---------------- Reloj ---------------- */
+function tickClock(){
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('es-CO', {hour12:false});
+  document.getElementById('dateLabel').textContent = now.toLocaleDateString('es-CO', {weekday:'long', day:'numeric', month:'long'});
+}
+tickClock(); setInterval(tickClock, 1000);
+
+/* ---------------- Seismograma decorativo (ticker de fondo) ---------------- */
+(function buildSeismoTicker(){
+  const scroll = document.getElementById('seismoScroll');
+  let d = "M0,27 ";
+  let x = 0;
+  for(let i=0;i<70;i++){
+    const amp = Math.random() < 0.12 ? (18 + Math.random()*16) : (3 + Math.random()*7);
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    x += 10;
+    d += `L${x},${27 + dir*amp} `;
+    x += 4;
+    d += `L${x},27 `;
+  }
+  const svgStr = `<svg viewBox="0 0 ${x} 54" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="${d}" fill="none" stroke="#e8542e" stroke-width="1.4" stroke-linecap="round" opacity="0.75"/>
+  </svg>`;
+  scroll.innerHTML = svgStr + svgStr;
+})();
+
+/* ---------------- Mapa sísmico ---------------- */
+const map = L.map('map', {zoomControl:true, attributionControl:false}).setView([7.8, -75.8], 6);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  maxZoom:18, subdomains:'abcd'
+}).addTo(map);
+
+// marcador de referencia: Montería
+L.circleMarker([8.7479, -75.8814], {
+  radius:5, color:'#49b9c9', weight:2, fillColor:'#49b9c9', fillOpacity:0.5
+}).addTo(map).bindPopup('Montería (referencia)');
+
+function magColor(m){
+  if(m >= 5) return '#e8542e';
+  if(m >= 4) return '#e8752e';
+  return '#f0b429';
+}
+function timeAgo(iso){
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const h = diffMs/3600000;
+  if(h < 1) return Math.round(h*60)+' min';
+  if(h < 48) return Math.round(h)+' h';
+  return Math.round(h/24)+' d';
+}
+
+async function loadEarthquakes(){
+  const statusEl = document.getElementById('quakeStatus');
+  const listEl = document.getElementById('quakeList');
+  const end = new Date();
+  const start = new Date(end.getTime() - 30*24*3600*1000);
+  const fmt = d => d.toISOString().slice(0,10);
+  // Ventana geográfica: Colombia, Panamá y borde caribeño (zona de mayor sismicidad cercana a Córdoba)
+  const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${fmt(start)}&endtime=${fmt(end)}&minlatitude=2&maxlatitude=13&minlongitude=-83&maxlongitude=-69&minmagnitude=2&orderby=time&limit=60`;
+  try{
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    const quakes = data.features || [];
+    listEl.innerHTML = '';
+    if(quakes.length === 0){
+      listEl.innerHTML = '<li><span class="quake-place">Sin sismos M≥2.0 registrados en la región en los últimos 30 días.</span></li>';
+    }
+    quakes.forEach(f=>{
+      const [lon, lat] = f.geometry.coordinates;
+      const m = f.properties.mag ?? 0;
+      const place = f.properties.place || 'Ubicación desconocida';
+      const time = f.properties.time;
+      const color = magColor(m);
+
+      L.circleMarker([lat, lon], {
+        radius: 4 + m*1.8,
+        color: color, weight:1.5, fillColor: color, fillOpacity:0.35
+      }).addTo(map).bindPopup(`<strong>M ${m.toFixed(1)}</strong><br>${place}<br>${new Date(time).toLocaleString('es-CO')}`);
+
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <span class="mag-chip mono" style="background:${color}22; color:${color}; border:1px solid ${color}55">M${m.toFixed(1)}</span>
+        <span class="quake-place">${place}</span>
+        <span class="quake-time">hace ${timeAgo(time)}</span>`;
+      listEl.appendChild(li);
+    });
+    statusEl.textContent = `${quakes.length} eventos · actualizado ${new Date().toLocaleTimeString('es-CO',{hour12:false})} · fuente: USGS fdsnws`;
+    statusEl.classList.remove('error');
+  }catch(err){
+    statusEl.textContent = 'No se pudo consultar el catálogo USGS en este momento ('+err.message+').';
+    statusEl.classList.add('error');
+    listEl.innerHTML = '<li><span class="quake-place">Error al cargar datos sísmicos.</span></li>';
+  }
+}
+loadEarthquakes();
+
+/* ---------------- Viento / vendavales ---------------- */
+const towns = [
+  {name:'Montería', lat:8.7479, lon:-75.8814},
+  {name:'Lorica', lat:9.2372, lon:-75.8143},
+  {name:'Cereté', lat:8.8889, lon:-75.7936},
+  {name:'Sahagún', lat:8.9461, lon:-75.4478},
+  {name:'Planeta Rica', lat:8.4061, lon:-75.5847},
+  {name:'Tierralta', lat:8.1728, lon:-76.0647},
+  {name:'Montelíbano', lat:7.9750, lon:-75.4136},
+  {name:'Puerto Libertador', lat:7.8891, lon:-75.6746},
+];
+
+function windStatus(gust){
+  if(gust > 60) return {label:'Vendaval', color:'#e8542e'};
+  if(gust > 40) return {label:'Atento', color:'#f0b429'};
+  return {label:'Normal', color:'#4caf7d'};
+}
+
+async function loadWind(){
+  const grid = document.getElementById('windGrid');
+  const statusEl = document.getElementById('windStatus');
+  grid.innerHTML = '';
+  let ok = 0, fail = 0;
+
+  await Promise.all(towns.map(async town=>{
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${town.lat}&longitude=${town.lon}&current=wind_speed_10m,wind_gusts_10m,wind_direction_10m&wind_speed_unit=kmh&timezone=America%2FBogota`;
+    const card = document.createElement('div');
+    card.className = 'wind-card';
+    try{
+      const res = await fetch(url);
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+      const cur = data.current || {};
+      const gust = cur.wind_gusts_10m ?? 0;
+      const speed = cur.wind_speed_10m ?? 0;
+      const dir = cur.wind_direction_10m ?? 0;
+      const st = windStatus(gust);
+      const pct = Math.min(100, (gust/90)*100);
+      card.innerHTML = `
+        <div class="wind-card-top">
+          <div class="wind-city">${town.name}</div>
+          <div class="wind-status" style="background:${st.color}22; color:${st.color}; border:1px solid ${st.color}55">${st.label}</div>
+        </div>
+        <div class="wind-values">
+          <span class="wind-gust">${gust.toFixed(0)}</span>
+          <span class="wind-unit">km/h ráfaga</span>
+        </div>
+        <div class="wind-sub">viento sostenido ${speed.toFixed(0)} km/h · dirección ${dir.toFixed(0)}°</div>
+        <div class="gauge-track"><div class="gauge-fill" style="width:${pct}%; background:${st.color}"></div></div>`;
+      ok++;
+    }catch(err){
+      card.innerHTML = `
+        <div class="wind-card-top"><div class="wind-city">${town.name}</div></div>
+        <div class="wind-sub" style="color:#e8542e">Sin datos disponibles</div>`;
+      fail++;
+    }
+    grid.appendChild(card);
+  }));
+
+  statusEl.textContent = `${ok} municipios actualizados${fail? ' · '+fail+' sin respuesta':''} · fuente: Open-Meteo · ${new Date().toLocaleTimeString('es-CO',{hour12:false})}`;
+  statusEl.classList.toggle('error', fail > 0 && ok === 0);
+}
+loadWind();
+
+/* Auto-actualización cada 5 minutos */
+setInterval(()=>{ loadEarthquakes(); loadWind(); }, 5*60*1000);
+</script>
+</body>
+</html>
